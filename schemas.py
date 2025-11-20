@@ -1,48 +1,134 @@
 """
-Database Schemas
+Database Schemas for Online Printing App
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Each Pydantic model generally maps to a MongoDB collection (lowercased name).
 """
+from typing import List, Optional, Literal, Dict, Any
+from pydantic import BaseModel, Field, EmailStr
 
-from pydantic import BaseModel, Field
-from typing import Optional
 
-# Example schemas (replace with your own):
+class Address(BaseModel):
+    label: Optional[str] = Field(None, description="Label like Home/Office")
+    address_line: str
+    city: str
+    pincode: str
+    is_default: bool = False
+
 
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    full_name: str
+    mobile: str
+    email: EmailStr
+    password_hash: str
+    addresses: List[Address] = []
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
 
-# Add your own schemas here:
-# --------------------------------------------------
+class Session(BaseModel):
+    user_id: str
+    token: str
+    expires_at: int  # epoch seconds
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+
+# Cart and order related
+PrintSize = Literal["A4", "A3", "A5"]
+PaperQuality = Literal[
+    "80_GSM",
+    "100_GSM",
+    "130_GSM",
+    "170_GSM",
+    "250_GSM",
+    "300_GSM_MATTE",
+    "300_GSM_GLOSS",
+]
+Sides = Literal["single", "double"]
+
+
+class FileRef(BaseModel):
+    filename: str
+    path: str
+    size: int
+    mime: Optional[str] = None
+
+
+class AddOns(BaseModel):
+    spiral_binding: Optional[Literal["up_to_80", "81_150"]] = None
+    lamination: Optional[Literal["ID", "A4", "A3"]] = None
+
+
+class DocumentPrintOptions(BaseModel):
+    color: Literal["bw", "colour"]
+    size: Literal["A4", "A3"]
+    gsm: Literal[80, 100, 130]
+    sides: Sides
+    files: List[FileRef]
+
+
+class VisitingCardOptions(BaseModel):
+    card_type: Literal["personal", "office"]
+    paper: Literal["economy_250_matte", "premium_300_matte", "premium_300_gloss"]
+    quantity: Literal[50, 100]
+    design: Literal["ready_design", "logo_plus_text"]
+    files: List[FileRef] = []
+
+
+class LetterheadOptions(BaseModel):
+    gsm: Literal[100, 130]
+    quantity: Literal[100, 200]
+    design: Literal["ready_design", "logo_plus_text"]
+    files: List[FileRef] = []
+
+
+class EnvelopeOptions(BaseModel):
+    type: Literal["standard_80", "premium_100"]
+    size: Literal["DL"]
+    quantity: Literal[100, 200]
+    files: List[FileRef] = []
+
+
+class FlyerOptions(BaseModel):
+    size: Literal["A5", "A4"]
+    gsm: Literal[130]
+    quantity: Literal[50, 100]
+    files: List[FileRef]
+
+
+class PosterOptions(BaseModel):
+    size: Literal["A3"]
+    gsm: Literal[170]
+    quantity: Literal[1, 10]
+    files: List[FileRef]
+
+
+class MugOptions(BaseModel):
+    print_area: Literal["one_side", "wrap"]
+    quantity: Literal[1, 2, 4]
+    images: List[FileRef] = []
+    text: Optional[str] = None
+
+
+class CartItem(BaseModel):
+    product: Literal[
+        "document_printing",
+        "visiting_cards",
+        "letterheads",
+        "envelopes",
+        "flyers",
+        "posters",
+        "custom_mug",
+    ]
+    options: Dict[str, Any]
+    addons: Optional[AddOns] = None
+    quantity: int = 1
+    unit_price: Optional[float] = None  # computed by backend
+    line_total: Optional[float] = None  # computed by backend
+
+
+class Order(BaseModel):
+    user_id: str
+    items: List[CartItem]
+    pricing_breakdown: Dict[str, Any]
+    total: float
+    status: Literal["Placed", "In Printing", "Ready for Dispatch", "Completed"] = "Placed"
+    address: Address
+    contains_office_visiting_cards: bool = False
+    whatsapp_link: Optional[str] = None
